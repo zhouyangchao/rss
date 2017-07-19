@@ -107,9 +107,9 @@ do { \
     } \
 } while (0)
 
-    DPDK3_RSS(0)
-    DPDK3_RSS(1)
-    DPDK3_RSS(2)
+    DPDK3_RSS(0);
+    DPDK3_RSS(1);
+    DPDK3_RSS(2);
     return ret;
 }
 
