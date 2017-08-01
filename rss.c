@@ -115,8 +115,8 @@ do { \
 
 uint32_t sse_rss();
 
-static uint32_t verify_tuple[TUPLE_LEN];
 static uint32_t tuples[TUPLE_NUM][TUPLE_LEN];
+static uint32_t rss_tuples[TUPLE_NUM][TUPLE_LEN];
 
 static inline void get_tuple(uint32_t *tuple, uint32_t len)
 {
@@ -125,11 +125,19 @@ static inline void get_tuple(uint32_t *tuple, uint32_t len)
     }
 }
 
+static inline void get_rss_tuple(uint32_t *rss_tuple, const uint32_t *tuple)
+{
+    rss_tuple[0] = tuple[1];
+    rss_tuple[1] = tuple[0];
+    rss_tuple[2] = (tuple[2] >> 16) | (tuple[2] << 16);
+}
+
 static inline void init_tuples()
 {
     srand(0);
     for (uint32_t i = 0; i < TUPLE_NUM; ++i) {
         get_tuple(tuples[i], TUPLE_LEN);
+        get_rss_tuple(rss_tuples[i], tuples[i]);
     }
 }
 
@@ -189,55 +197,42 @@ int main(int argc, char *argv[])
     }
     end = rdtsc();
     printf("\tpretch: cycles: %lu, average = %lu\n", (end - start), (end - start)/(TUPLE_NUM/6));
+    uint64_t sum = 0, rss_sum = 0;
+    start = rdtsc();
+    for (size_t i = 0; i < TUPLE_NUM; i+=6) {
+        sum += tuples[i][0];
+        rss_sum += rss_tuples[i][0];
+    }
+    end = rdtsc();
+    printf("\taccess: sum = %lu, rss_sum = %lu, cycles: %lu, average = %lu\n", sum, rss_sum, (end - start), (end - start)/((TUPLE_NUM*2)/6));
 
     printf("round1 normal test:\n");
     for (size_t i = 1; i < argc; ++i) {
-        uint64_t sum = 0, start = rdtsc(), end;
+        uint64_t sum = 0, rss_sum = 0, start = rdtsc(), end;
         for (size_t j = 0; j < sizeof(rsss)/sizeof(rss_t); ++j) {
             if (!strcmp(argv[i], rsss[j].name)) {
                 for (size_t k = 0; k < TUPLE_NUM; ++k) {
                     sum += rsss[j].func(tuples[k], TUPLE_LEN);
+                    rss_sum += rsss[j].func(rss_tuples[k], TUPLE_LEN);
                 }
             }
         }
         end = rdtsc();
-        printf("\t%s: sum = %lu, cycles = %lu, average = %lu\n", argv[i], sum, (end - start), (end - start)/TUPLE_NUM);
-    }
-
-    printf("round2 normal+loop-expand test:\n");
-    for (size_t i = 1; i < argc; ++i) {
-        uint64_t sum = 0, start = rdtsc(), end;
-        for (size_t j = 0; j < sizeof(rsss)/sizeof(rss_t); ++j) {
-            if (!strcmp(argv[i], rsss[j].name)) {
-                for (size_t k = 0; k < TUPLE_NUM; k+=10) {
-                    sum += rsss[j].func(tuples[k], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+1], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+2], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+3], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+4], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+5], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+6], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+7], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+8], TUPLE_LEN);
-                    sum += rsss[j].func(tuples[k+9], TUPLE_LEN);
-                }
-            }
-        }
-        end = rdtsc();
-        printf("\t%s: sum = %lu, cycles = %lu, average = %lu\n", argv[i], sum, (end - start), (end - start)/TUPLE_NUM);
+        printf("\t%s: sum = %lu, rss_sum = %lu, cycles = %lu, average = %lu\n", argv[i], sum, rss_sum, (end - start), (end - start)/(TUPLE_NUM*2));
     }
 
 #define RSS_TEST(name) \
 do { \
-    uint64_t sum = 0, start = rdtsc(), end; \
+    uint64_t sum = 0, rss_sum = 0, start = rdtsc(), end; \
     for (size_t k = 0; k < TUPLE_NUM; ++k) { \
         sum += name##_rss(tuples[k], TUPLE_LEN); \
+        rss_sum += name##_rss(rss_tuples[k], TUPLE_LEN); \
     } \
     end = rdtsc(); \
-    printf("\t%s: sum = %lu, cycles = %lu, average = %lu\n", #name, sum, (end - start), (end - start)/TUPLE_NUM); \
+    printf("\t%s: sum = %lu, rss_sum = %lu, cycles = %lu, average = %lu\n", #name, sum, rss_sum, (end - start), (end - start)/(TUPLE_NUM*2)); \
 } while (0)
 
-    printf("round3 inline test:\n");
+    printf("round2 inline test:\n");
     RSS_TEST(base);
     RSS_TEST(sup);
     RSS_TEST(sup2);
@@ -246,38 +241,5 @@ do { \
     RSS_TEST(dpdk2);
     RSS_TEST(dpdk3);
 
-#define RSS_TEST2(name) \
-do { \
-    uint64_t sum = 0, start = rdtsc(), end; \
-    for (size_t k = 0; k < TUPLE_NUM; k+=0x10) { \
-        sum += name##_rss(tuples[k], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+1], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+2], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+3], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+4], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+5], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+6], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+7], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+8], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+9], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+10], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+11], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+12], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+13], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+14], TUPLE_LEN); \
-        sum += name##_rss(tuples[k+15], TUPLE_LEN); \
-    } \
-    end = rdtsc(); \
-    printf("\t%s: sum = %lu, cycles = %lu, average = %lu\n", #name, sum, (end - start), (end - start)/TUPLE_NUM); \
-} while (0)
-
-    printf("round4 inline+loop-expand test:\n");
-    RSS_TEST2(base);
-    RSS_TEST2(sup);
-    RSS_TEST2(sup2);
-    RSS_TEST2(sup3);
-    RSS_TEST2(dpdk);
-    RSS_TEST2(dpdk2);
-    RSS_TEST2(dpdk3);
     return 0;
 }
