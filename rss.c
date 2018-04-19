@@ -82,7 +82,7 @@ static inline uint32_t dpdk_rss(const uint32_t *input_tuple, uint32_t input_len)
 
 static inline uint32_t dpdk2_rss(const uint32_t *input_tuple, uint32_t input_len)
 {
-    uint32_t i, map, j, ret = 0;
+    uint32_t i, j, ret = 0;
     for (j = 0; j < input_len; j++) {
         for (uint32_t map__ = input_tuple[j]; 
             map__ && ((i = raw_ctz(map__)), true); 
@@ -96,7 +96,7 @@ static inline uint32_t dpdk2_rss(const uint32_t *input_tuple, uint32_t input_len
 
 static inline uint32_t dpdk3_rss(const uint32_t *input_tuple, uint32_t input_len)
 {
-    uint32_t i, map, ret = 0;
+    uint32_t i, ret = 0;
 #define DPDK3_RSS(round) \
 do { \
     for (uint32_t map__ = input_tuple[round]; \
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 {
     init_tuples();
     if (argc < 2) {
-        printf("invalid parameter.\n");
+        printf("invalid parameter. please input test type\n");
         return -1;
     }
     cpu_set_t cs;
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     sched_setaffinity(getpid(), CPU_COUNT(&cs), &cs);
 
     printf("base bench:\n");
-    uint64_t count = 0, start = rdtsc(), end;
+    uint64_t start = rdtsc(), end;
     for (size_t i = 0; i < TUPLE_NUM; i+=6) {
         prefetch(tuples[i]);
     }
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
     printf("\taccess: sum = %lu, rss_sum = %lu, cycles: %lu, average = %lu\n", sum, rss_sum, (end - start), (end - start)/((TUPLE_NUM*2)/6));
 
     printf("round1 normal test:\n");
-    for (size_t i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i) {
         uint64_t sum = 0, rss_sum = 0, start = rdtsc(), end;
         for (size_t j = 0; j < sizeof(rsss)/sizeof(rss_t); ++j) {
             if (!strcmp(argv[i], rsss[j].name)) {
