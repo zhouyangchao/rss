@@ -1,2 +1,2 @@
-# rss test
-rss compute performance test
+# RSS(Receive Side Scaling) performance test
+RSS performance test by software
